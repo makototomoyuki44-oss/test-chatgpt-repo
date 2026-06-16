@@ -1,8 +1,11 @@
 """オセロ（リバーシ）ゲーム
 
-コンソールで遊べる2人対戦用オセロゲームです。
+コンソールで遊べる人間 vs コンピュータ対戦用オセロゲームです。
 黒(●)が先手、白(○)が後手で交互に石を置きます。
+プレイヤーの一方が人間、もう一方がコンピュータです。
 """
+
+import random
 
 # 盤面のサイズ
 SIZE = 8
@@ -82,6 +85,30 @@ def place_stone(board, row, col, stone):
     return True
 
 
+def choose_computer_move(board, stone):
+    """コンピュータの着手を選ぶ。
+
+    角を最優先し、次に裏返せる石が最も多い手を選ぶ。
+    同点の候補が複数あればランダムに選ぶ。
+    """
+    moves = valid_moves(board, stone)
+    if not moves:
+        return None
+
+    corners = {(0, 0), (0, SIZE - 1), (SIZE - 1, 0), (SIZE - 1, SIZE - 1)}
+    corner_moves = [m for m in moves if m in corners]
+    if corner_moves:
+        return random.choice(corner_moves)
+
+    # 裏返せる石の数が最大の手を集める
+    best_score = max(len(stones_to_flip(board, r, c, stone)) for r, c in moves)
+    best_moves = [
+        (r, c) for r, c in moves
+        if len(stones_to_flip(board, r, c, stone)) == best_score
+    ]
+    return random.choice(best_moves)
+
+
 def count_stones(board):
     """(黒の数, 白の数) を返す。"""
     black = sum(row.count(BLACK) for row in board)
@@ -112,32 +139,27 @@ def parse_input(text):
     return row, col
 
 
-def play():
-    """ゲームのメインループ。"""
-    board = create_board()
-    current = BLACK
-    print("=== オセロ（リバーシ） ===")
-    print("入力形式: 「行 列」（例: 2 3）。終了は q。")
+def choose_human_color():
+    """人間が使う石の色を選ぶ。黒(先手)か白(後手)。"""
+    while True:
+        text = input("あなたの色を選んでください 黒=先手[b] / 白=後手[w] > ").strip().lower()
+        if text in ("b", "黒", "●"):
+            return BLACK
+        if text in ("w", "白", "○"):
+            return WHITE
+        print("b（黒）か w（白）で入力してください。")
+
+
+def human_move(board, current, moves):
+    """人間の手番。着手できたら True、中断なら False を返す。"""
+    print(f"手番: {current}（あなた）  置ける場所: " +
+          ", ".join(f"({r},{c})" for r, c in moves))
 
     while True:
-        moves = valid_moves(board, current)
-        # 現在のプレイヤーが置ける場所がない場合
-        if not moves:
-            # 相手も置けなければゲーム終了
-            if not valid_moves(board, opponent(current)):
-                break
-            print(f"{current} は置ける場所がないためパスします。")
-            current = opponent(current)
-            continue
-
-        print_board(board)
-        print(f"手番: {current}  置ける場所: " +
-              ", ".join(f"({r},{c})" for r, c in moves))
-
         text = input(f"{current} の手を入力してください > ").strip()
         if text.lower() == "q":
             print("ゲームを中断しました。")
-            return
+            return False
 
         pos = parse_input(text)
         if pos is None:
@@ -150,6 +172,47 @@ def play():
             continue
 
         place_stone(board, row, col, current)
+        return True
+
+
+def computer_move(board, current):
+    """コンピュータの手番。"""
+    row, col = choose_computer_move(board, current)
+    print(f"手番: {current}（コンピュータ）  → ({row},{col}) に置きました。")
+    place_stone(board, row, col, current)
+
+
+def play():
+    """ゲームのメインループ。"""
+    board = create_board()
+    current = BLACK
+    print("=== オセロ（リバーシ） ===")
+    print("入力形式: 「行 列」（例: 2 3）。終了は q。")
+
+    human = choose_human_color()
+    computer = opponent(human)
+    print(f"あなた: {human}　コンピュータ: {computer}")
+
+    while True:
+        moves = valid_moves(board, current)
+        # 現在のプレイヤーが置ける場所がない場合
+        if not moves:
+            # 相手も置けなければゲーム終了
+            if not valid_moves(board, opponent(current)):
+                break
+            who = "あなた" if current == human else "コンピュータ"
+            print(f"{current}（{who}）は置ける場所がないためパスします。")
+            current = opponent(current)
+            continue
+
+        print_board(board)
+
+        if current == human:
+            if not human_move(board, current, moves):
+                return
+        else:
+            computer_move(board, current)
+
         current = opponent(current)
 
     # 結果発表
